@@ -1,7 +1,9 @@
 LogLevel ${CUPS_LOG_LEVEL}
 MaxLogSize 0
-# page accounting consumed by cups-exporter.py: printer user job page copies media sides
-PageLogFormat %p %u %j %P %C %{media} %{sides}
+# page accounting consumed by cups-exporter.py. Fixed single-token fields first,
+# then job-name last (it may contain spaces):
+#   printer user job page copies media sides host time-at-creation job-name...
+PageLogFormat %p %u %j %P %C %{media} %{sides} %{job-originating-host-name} %{time-at-creation} %{job-name}
 # NB: AccessLog/ErrorLog/PageLog live in cups-files.conf (since CUPS 1.6), not here;
 # the entrypoint sends AccessLog/ErrorLog to stderr (kubectl logs) but keeps PageLog
 # as a file so the exporter can read it.
