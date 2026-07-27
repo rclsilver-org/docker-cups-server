@@ -1,0 +1,32 @@
+[sssd]
+services = nss,pam
+domains = ldap
+enable_files_domain = false
+debug_timestamps = true
+debug_microseconds = false
+
+[domain/ldap]
+debug_timestamps = true
+debug_microseconds = false
+min_id = 1
+max_id = 0
+enumerate = false
+cache_credentials = false
+account_cache_expiration = 0
+use_fully_qualified_names = false
+ignore_group_members = false
+id_provider = ldap
+auth_provider = ldap
+chpass_provider = ldap
+dns_resolver_timeout = 5
+case_sensitive = true
+proxy_fast_alias = false
+ldap_uri = ${LDAP_URL}
+ldap_search_base = ${LDAP_SEARCH_BASE}
+ldap_user_search_base = ${LDAP_USER_SEARCH_BASE}
+ldap_group_search_base = ${LDAP_GROUP_SEARCH_BASE}
+ldap_user_uid_number = uidNumber
+ldap_user_gid_number = gidNumber
+ldap_user_home_directory = homeDirectory
+ldap_user_shell = loginShell
+ldap_tls_reqcert = allow

@@ -1,0 +1,79 @@
+name: Build the image
+on:
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-latest
+
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: rclsilver-org/cups-server
+      DOCKER_FILE: ./Dockerfile
+
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ !startsWith(github.ref, 'refs/tags/v') && 20 || 1 }}
+          fetch-tags: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Login to the Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Generate the version
+        id: version
+        run: |
+          if git describe --tags --exact-match 2>/dev/null; then
+            VERSION=$(git describe --tags --exact-match)
+          else
+            if git describe --tags --match 'v*.*.*' 2>/dev/null; then
+              VERSION=$(git describe --tags --match 'v*.*.*')
+            else
+              COMMIT_COUNT=$(git rev-list --all --count)
+              SHORT_HASH=$(git rev-parse --short HEAD)
+              VERSION="0.0.0-${COMMIT_COUNT}-${SHORT_HASH}"
+            fi
+          fi
+          echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Generated version: ${VERSION}"
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          file: ${{ env.DOCKER_FILE }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.value }}
+            ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}/{1}:latest', env.REGISTRY, env.IMAGE_NAME) || '' }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
+          title: ${{ steps.version.outputs.value }}

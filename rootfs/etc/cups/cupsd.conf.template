@@ -1,0 +1,82 @@
+LogLevel ${CUPS_LOG_LEVEL}
+MaxLogSize 0
+# page accounting consumed by cups-exporter.py: printer user job page copies media sides
+PageLogFormat %p %u %j %P %C %{media} %{sides}
+# NB: AccessLog/ErrorLog/PageLog live in cups-files.conf (since CUPS 1.6), not here;
+# the entrypoint sends AccessLog/ErrorLog to stderr (kubectl logs) but keeps PageLog
+# as a file so the exporter can read it.
+
+# IPP on all interfaces + local socket
+Listen *:631
+Listen /run/cups/cups.sock
+
+DefaultEncryption IfRequested
+DefaultAuthType Basic
+Browsing Off
+WebInterface No
+
+# Accept any Host: header. cupsd otherwise rejects requests whose Host is not one
+# of its known names ("invalid Host field"), which breaks clients reaching the
+# proxy through its external-dns hostname instead of the raw LoadBalancer IP.
+# Safe here: the web UI is off and every print operation requires @PRINT_GROUP auth.
+ServerAlias *
+
+<Location />
+  Order allow,deny
+  Allow all
+</Location>
+
+<Location /admin>
+  Order allow,deny
+  Allow localhost
+</Location>
+
+<Location /admin/conf>
+  AuthType Default
+  Require user @SYSTEM
+  Order allow,deny
+  Allow localhost
+</Location>
+
+# family-printer uses this policy: printing requires an authenticated member of @${PRINT_GROUP}.
+<Policy authprint>
+  JobPrivateAccess default
+  JobPrivateValues default
+  SubscriptionPrivateAccess default
+  SubscriptionPrivateValues default
+
+  <Limit Create-Job Print-Job Print-URI Send-Document Send-URI Validate-Job>
+    AuthType Basic
+    Require user @${PRINT_GROUP}
+    Order deny,allow
+  </Limit>
+
+  <Limit Send-Document Send-URI Hold-Job Release-Job Restart-Job Purge-Jobs Set-Job-Attributes Create-Job-Subscription Renew-Subscription Cancel-Subscription Cancel-Job CUPS-Move-Job CUPS-Get-Document>
+    AuthType Basic
+    Require user @OWNER @${PRINT_GROUP} @SYSTEM
+    Order deny,allow
+  </Limit>
+
+  <Limit CUPS-Add-Modify-Printer CUPS-Delete-Printer CUPS-Add-Modify-Class CUPS-Delete-Class CUPS-Set-Default CUPS-Get-Devices Pause-Printer Resume-Printer Set-Printer-Attributes Enable-Printer Disable-Printer Activate-Printer Restart-Printer Shutdown-Printer Startup-Printer Promote-Job Schedule-Job-After Cancel-Jobs>
+    AuthType Default
+    Require user @SYSTEM
+    Order deny,allow
+  </Limit>
+
+  <Limit All>
+    Order deny,allow
+  </Limit>
+</Policy>
+
+# real-printer uses this policy: only local system (the forward.sh hook, running as root) may print.
+<Policy internalonly>
+  <Limit Create-Job Print-Job Print-URI Send-Document Send-URI Validate-Job Cancel-Job Cancel-Jobs>
+    AuthType Default
+    Require user @SYSTEM
+    Order deny,allow
+  </Limit>
+
+  <Limit All>
+    Order deny,allow
+  </Limit>
+</Policy>
